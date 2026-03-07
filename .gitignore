@@ -11,6 +11,26 @@ registry/auth/htpasswd
 # SSL-сертификаты (когда появятся)
 nginx/ssl/
 
+# ─── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+
+# ─── Node / Frontend ──────────────────────────────────────────────────────────
+node_modules/
+frontend/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
 # ─── OS / Editor ──────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
