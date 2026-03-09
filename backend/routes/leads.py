@@ -1,7 +1,8 @@
 """Роуты для работы с заявками (Lead)."""
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from models import lead as lead_crud
+from routes.auth import get_current_admin
 from models import lead_metrics as metrics_crud
 from schemas.lead import LeadCreate, LeadUpdate, LeadSubmit
 
@@ -57,8 +58,8 @@ async def get_lead(lead_id: int):
 
 
 @router.get("")
-async def list_leads(skip: int = 0, limit: int = 100):
-    """Список заявок с пагинацией."""
+async def list_leads(skip: int = 0, limit: int = 100, _admin: dict = Depends(get_current_admin)):
+    """Список заявок с пагинацией (только для авторизованных админов)."""
     return await lead_crud.get_leads(skip=skip, limit=limit)
 
 

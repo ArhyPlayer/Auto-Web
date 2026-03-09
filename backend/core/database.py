@@ -113,6 +113,14 @@ async def init_tables() -> None:
             )
         """)
         await conn.execute("""
+            CREATE TABLE IF NOT EXISTS admins (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(255) UNIQUE NOT NULL,
+                password_hash VARCHAR(255) NOT NULL,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        await conn.execute("""
             CREATE TABLE IF NOT EXISTS admin_config (
                 id SERIAL PRIMARY KEY,
                 services JSONB DEFAULT '[]',
@@ -125,6 +133,17 @@ async def init_tables() -> None:
             )
         """)
         # Сид: дефолтная конфигурация с услугами, если таблица пуста
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS behavior_metrics (
+                id SERIAL PRIMARY KEY,
+                application_id INTEGER NOT NULL DEFAULT 0,
+                time_on_page INTEGER NOT NULL DEFAULT 0,
+                buttons_clicked JSONB DEFAULT '[]',
+                cursor_positions JSONB DEFAULT '[]',
+                return_frequency INTEGER NOT NULL DEFAULT 0,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
         row = await conn.fetchrow("SELECT 1 FROM admin_config LIMIT 1")
         if row is None:
             await conn.execute("""

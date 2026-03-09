@@ -2,8 +2,8 @@ services:
 
   # ─────────────────────────────────────────────────────────────────────────────
   # NGINX — единственная точка входа извне
-  # Порт 80  : лид-форма / frontend
-  # Порт 8080: pgAdmin
+  # Порт 80: лид-форма / frontend / API (через /api/)
+  # Backend доступен только через Nginx, порт не пробрасывается
   # ─────────────────────────────────────────────────────────────────────────────
   nginx:
     image: nginx:alpine
@@ -11,7 +11,6 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
-      - "8080:8080"
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
       - ./nginx/html:/usr/share/nginx/html:ro
@@ -19,7 +18,6 @@ services:
       - frontend_net
     depends_on:
       - backend
-      - pgadmin
     mem_limit: 128m
     memswap_limit: 128m
 
@@ -47,31 +45,7 @@ services:
     memswap_limit: 512m
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # pgAdmin — веб-интерфейс для PostgreSQL
-  # Доступ: http://<server-ip>:8080  (через Nginx)
-  # ─────────────────────────────────────────────────────────────────────────────
-  pgadmin:
-    image: dpage/pgadmin4
-    container_name: pgadmin
-    restart: unless-stopped
-    environment:
-      PGADMIN_DEFAULT_EMAIL:            ${PGADMIN_EMAIL}
-      PGADMIN_DEFAULT_PASSWORD:         ${PGADMIN_PASSWORD}
-      PGADMIN_CONFIG_SERVER_MODE:       "True"
-      PGADMIN_CONFIG_ENHANCED_COOKIE_PROTECTION: "True"
-    volumes:
-      - pgadmin_data:/var/lib/pgadmin
-    networks:
-      - frontend_net
-      - db_net
-    depends_on:
-      postgres:
-        condition: service_healthy
-    mem_limit: 512m
-    memswap_limit: 768m   # дополнительный swap-буфер на время pull (~500MB образ)
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # BACKEND — FastAPI, приватный (порт не пробрасывается, доступ только через Nginx)
+  # BACKEND — FastAPI, доступ только через Nginx (порт не пробрасывается)
   # ─────────────────────────────────────────────────────────────────────────────
   backend:
     build: ./backend
@@ -79,6 +53,8 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-secret-key-32chars}
+      ENABLE_DOCS: ${ENABLE_DOCS:-0}
     networks:
       - frontend_net   # чтобы Nginx мог достучаться
       - db_net         # чтобы достучаться до PostgreSQL
@@ -88,83 +64,22 @@ services:
     mem_limit: 512m
     memswap_limit: 512m
 
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Docker Registry — приватный реестр образов
-  # Доступ снаружи: docker login <server-ip>:5000
-  # Пуш:  docker push <server-ip>:5000/backend:latest
-  #
-  # ⚠️  HTTP (без TLS). На локальной машине добавить в /etc/docker/daemon.json:
-  #     { "insecure-registries": ["<server-ip>:5000"] }
-  # ─────────────────────────────────────────────────────────────────────────────
-  registry:
-    image: registry:2
-    container_name: registry
-    restart: unless-stopped
-    ports:
-      - "5000:5000"
-    environment:
-      REGISTRY_AUTH:                        htpasswd
-      REGISTRY_AUTH_HTPASSWD_REALM:         "Docker Registry"
-      REGISTRY_AUTH_HTPASSWD_PATH:          /auth/htpasswd
-      REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY: /data
-      REGISTRY_HTTP_ADDR:                   0.0.0.0:5000
-    volumes:
-      - ./registry/auth:/auth:ro
-      - registry_data:/data
-    networks:
-      - registry_net
-    mem_limit: 256m
-    memswap_limit: 256m
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Watchtower — авто-обновление контейнеров из реестра
-  # Проверяет обновления каждый день в 04:00 (cron: "0 0 4 * * *")
-  # Монтирует docker credentials для доступа к приватному реестру
-  # ─────────────────────────────────────────────────────────────────────────────
-  watchtower:
-    image: containrrr/watchtower
-    container_name: watchtower
-    restart: unless-stopped
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - /root/.docker/config.json:/config.json:ro
-    environment:
-      DOCKER_CONFIG:              /config.json
-      DOCKER_API_VERSION:         "1.44"
-      WATCHTOWER_CLEANUP:         "true"       # удалять старые образы после обновления
-      WATCHTOWER_INCLUDE_STOPPED: "false"
-      WATCHTOWER_SCHEDULE:        "0 0 4 * * *"
-      WATCHTOWER_ROLLING_RESTART: "true"
-      TZ:                         Europe/Moscow
-    mem_limit: 128m
-    memswap_limit: 128m
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Сети
 # ─────────────────────────────────────────────────────────────────────────────
 networks:
   frontend_net:
     driver: bridge
-    # Nginx <-> pgAdmin <-> (backend в будущем)
+    # Nginx <-> Backend
 
   db_net:
     driver: bridge
     internal: true   # нет выхода наружу — только внутри контура
-    # postgres <-> pgAdmin <-> (backend в будущем)
-
-  registry_net:
-    driver: bridge
-    # registry — изолированная сеть реестра
+    # postgres <-> backend
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Тома
 # ─────────────────────────────────────────────────────────────────────────────
 volumes:
   postgres_data:
-    driver: local
-
-  pgadmin_data:
-    driver: local
-
-  registry_data:
     driver: local

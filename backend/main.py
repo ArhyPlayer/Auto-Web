@@ -1,7 +1,9 @@
 """
 FastAPI-приложение для лид-формы.
 Приватный backend — доступ только через Nginx (порт не пробрасывается наружу).
+Swagger/OpenAPI отключены, чтобы API не был виден снаружи.
 """
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -10,7 +12,7 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 
 from core.database import init_pool, close_pool, init_tables
-from routes import leads, lead_metrics, admin_config
+from routes import leads, lead_metrics, admin_config, auth, behavior_metrics
 
 
 @asynccontextmanager
@@ -22,12 +24,18 @@ async def lifespan(app: FastAPI):
     await close_pool()
 
 
+# Отключаем Swagger/OpenAPI, чтобы API не был виден снаружи
+_docs_enabled = os.environ.get("ENABLE_DOCS", "").lower() in ("1", "true", "yes")
+
 app = FastAPI(
     title="Lead Form API",
     description="API для приёма заявок и метрик поведения клиентов",
     version="1.0.0",
     lifespan=lifespan,
-    root_path="/api",  # Nginx проксирует /api/ — Swagger будет слать запросы на /api/*
+    root_path="/api",
+    docs_url="/docs" if _docs_enabled else None,
+    redoc_url="/redoc" if _docs_enabled else None,
+    openapi_url="/openapi.json" if _docs_enabled else None,
 )
 
 # CORS — для запросов с фронтенда
@@ -70,7 +78,9 @@ async def global_exception_handler(request: Request, exc: Exception):
 # Nginx проксирует /api/ на backend:8000/, поэтому префикс /api уже отсекается
 app.include_router(leads.router)
 app.include_router(lead_metrics.router)
+app.include_router(behavior_metrics.router)
 app.include_router(admin_config.router)
+app.include_router(auth.router)
 
 
 @app.get("/health")

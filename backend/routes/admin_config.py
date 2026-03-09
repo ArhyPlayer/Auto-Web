@@ -1,14 +1,15 @@
 """Роуты для работы с админ-конфигурацией."""
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response
 
 from models import admin_config as admin_crud
 from schemas.admin_config import AdminConfigCreate, AdminConfigUpdate
+from routes.auth import get_current_admin
 
 router = APIRouter(prefix="/admin-config", tags=["admin-config"])
 
 
 @router.post("", status_code=201)
-async def create_admin_config(data: AdminConfigCreate):
+async def create_admin_config(data: AdminConfigCreate, _: dict = Depends(get_current_admin)):
     """Создать запись конфигурации."""
     result = await admin_crud.create_admin_config(
         services=data.services,
@@ -42,7 +43,7 @@ async def get_active_config(response: Response):
 
 
 @router.get("/{config_id}")
-async def get_admin_config(config_id: int):
+async def get_admin_config(config_id: int, _: dict = Depends(get_current_admin)):
     """Получить конфигурацию по ID."""
     result = await admin_crud.get_admin_config(config_id)
     if result is None:
@@ -51,13 +52,13 @@ async def get_admin_config(config_id: int):
 
 
 @router.get("")
-async def list_admin_configs(skip: int = 0, limit: int = 100):
+async def list_admin_configs(skip: int = 0, limit: int = 100, _: dict = Depends(get_current_admin)):
     """Список всех конфигураций."""
     return await admin_crud.get_all_admin_configs(skip=skip, limit=limit)
 
 
 @router.patch("/{config_id}")
-async def update_admin_config(config_id: int, data: AdminConfigUpdate):
+async def update_admin_config(config_id: int, data: AdminConfigUpdate, _: dict = Depends(get_current_admin)):
     """Обновить конфигурацию."""
     updates = data.model_dump(exclude_none=True)
     if not updates:
@@ -72,7 +73,7 @@ async def update_admin_config(config_id: int, data: AdminConfigUpdate):
 
 
 @router.delete("/{config_id}", status_code=204)
-async def delete_admin_config(config_id: int):
+async def delete_admin_config(config_id: int, _: dict = Depends(get_current_admin)):
     """Удалить конфигурацию."""
     ok = await admin_crud.delete_admin_config(config_id)
     if not ok:
